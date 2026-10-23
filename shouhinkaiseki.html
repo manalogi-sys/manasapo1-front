@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>商品分析・査定サポート</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8f9fa; padding: 15px; color: #333; margin: 0; }
+        .container { max-width: 500px; margin: 0 auto; background: #fff; padding: 25px 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        h2 { text-align: center; color: #2c3e50; margin-bottom: 25px; font-size: 22px; font-weight: 700; letter-spacing: 0.5px; }
+        label { display: block; font-weight: bold; margin-bottom: 12px; font-size: 14px; color: #4a5568; }
+        .upload-trigger-btn { width: 100%; background-color: #90cdf4; border: none; border-radius: 10px; padding: 15px; text-align: center; font-weight: bold; color: #1a202c; cursor: pointer; transition: all 0.2s; margin-bottom: 20px; box-sizing: border-box; box-shadow: 0 4px 6px rgba(144, 205, 244, 0.3); }
+        .upload-trigger-btn:hover { background-color: #63b3ed; }
+        .image-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 25px; }
+        .image-upload-box { position: relative; width: 100%; aspect-ratio: 1 / 1; background-color: #f7fafc; border: 1px solid #e2e8f0; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
+        .image-upload-box .icon { font-size: 22px; color: #cbd5e0; }
+        .image-upload-box img { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; z-index: 2; }
+        textarea { width: 100%; height: 90px; padding: 12px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; box-sizing: border-box; font-size: 15px; resize: none; transition: border 0.2s; }
+        textarea:focus { border-color: #3182ce; outline: none; background: #fff; }
+        .form-group { margin-bottom: 25px; }
+        #submitBtn { width: 100%; background-color: #b794f4; color: white; border: none; padding: 15px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: all 0.2s; margin-top: 10px; box-shadow: 0 4px 6px rgba(183, 148, 244, 0.3); }
+        #submitBtn:hover { background-color: #9f7aea; }
+        #submitBtn:disabled { background-color: #cbd5e0; cursor: not-allowed; box-shadow: none; }
+        #loading { display: none; text-align: center; margin-top: 20px; font-weight: bold; color: #4a5568; }
+        .spinner { display: inline-block; width: 30px; height: 30px; border: 3px solid rgba(159,122,234,.3); border-radius: 50%; border-top-color: #9f7aea; animation: spin 1s ease-in-out infinite; margin-bottom: 10px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #result-box { display: none; margin-top: 25px; padding: 20px; background-color: #f7fafc; border: 1px solid #e2e8f0; border-radius: 12px; animation: fadeIn 0.5s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .result-title { font-size: 18px; font-weight: bold; color: #2d3748; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px; }
+        .result-item { margin-bottom: 18px; }
+        .result-label { font-size: 12px; color: #4a5568; font-weight: bold; background: #edf2f7; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-bottom: 6px; }
+        .result-value { font-size: 15px; color: #1a202c; font-weight: 500; line-height: 1.6; white-space: pre-wrap; }
+        .price-highlight { font-size: 22px; color: #e53e3e; font-weight: bold; }
+        .stars { font-size: 20px; color: #ecc94b; }
+        #marketBtn { display: block; width: 100%; text-align: center; box-sizing: border-box; background-color: #38a169; color: white; text-decoration: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 8px; margin-top: 15px; transition: background 0.2s; }
+        #marketBtn:hover { background-color: #2f855a; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>商品分析・査定サポート</h2>
+    
+    <div class="form-group">
+        <div class="upload-trigger-btn" onclick="document.getElementById('bulkFiles').click()">
+            📸 画像を選択（最大6枚）
+        </div>
+        <input type="file" id="bulkFiles" accept="image/*" multiple style="display: none;" onclick="clearAllPreviousState()" onchange="handleFileSelect(this)">
+
+        <div class="image-grid">
+            <div class="image-upload-box" id="box1"><div class="icon">📷</div></div>
+            <div class="image-upload-box" id="box2"><div class="icon">📷</div></div>
+            <div class="image-upload-box" id="box3"><div class="icon">📷</div></div>
+            <div class="image-upload-box" id="box4"><div class="icon">📷</div></div>
+            <div class="image-upload-box" id="box5"><div class="icon">📷</div></div>
+            <div class="image-upload-box" id="box6"><div class="icon">📷</div></div>
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label>💬 コメント（状態・暫定卸値 etc.）【任意】</label>
+        <textarea id="userComment" placeholder="例：暫定卸値5000円、傷なし美品、箱付き"></textarea>
+    </div>
+    
+    <button id="submitBtn" onclick="startAnalysis()">🔍 分析スタート</button>
+    
+    <div id="loading">
+        <div class="spinner"></div>
+        <div id="loading-text">画像をアップロード中...</div>
+    </div>
+
+    <div id="result-box">
+        <div class="result-title">📊 分析結果</div>
+        
+        <div class="result-item">
+            <div class="result-label">特定された商品名</div>
+            <div class="result-value" id="res-name" style="font-weight: bold;">-</div>
+        </div>
+
+        <div class="result-item">
+            <div class="result-label" style="background-color: #feebc8; color: #c05621;">💡 買取専門店向けアドバイス</div>
+            <div class="result-value" id="res-purchase-advice">-</div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px dashed #e2e8f0; margin: 20px 0;">
+
+        <div class="result-item">
+            <div class="result-label">ヤフオク落札相場予想価格帯</div>
+            <div class="result-value price-highlight" id="res-price">-</div>
+        </div>
+        
+        <div class="result-item">
+            <div class="result-label">ヤフオク出品オススメ度</div>
+            <div class="result-value stars" id="res-stars">-</div>
+        </div>
+        
+        <div class="result-item">
+            <div class="result-label" style="background-color: #e9d8fd; color: #6b46c1;">🔨 ヤフオク出品アドバイス</div>
+            <div class="result-value" id="res-yahoo-advice">-</div>
+        </div>
+        
+        <a id="marketBtn" href="#" target="_blank" style="display: none;">📊 ヤフオク落札相場を直接確認</a>
+    </div>
+</div>
+
+<script>
+const GAS_SATEI_URL = "https://script.google.com/macros/s/AKfycbx1usijBw87uSJAwAC4oQLP1sWQPIISP1j5mdrKq_--D7h7eV3m-1zc30zpPhorUwZV/exec";
+
+let globalLineId = null;
+let selectedFilesArray = [];
+let resultCheckTimer = null;
+
+// 送信ごとに一意のIDを作る（このIDの結果だけを受け取るため）
+function createRequestId() {
+    if (window.crypto && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    // 古い端末向けの予備
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// LINE LIFFの初期化
+window.onload = function() {
+    liff.init({ liffId: "2011480421-IuqiIUBK" })
+        .then(() => {
+            if (liff.isLoggedIn()) {
+                return liff.getProfile();
+            } else {
+                liff.login();
+            }
+        })
+        .then(profile => {
+            if (profile) {
+                globalLineId = profile.userId;
+            }
+        })
+        .catch(err => {
+            console.error("LINE初期化エラー: " + err.toString());
+        });
+};
+
+// 表示状態とタイマーの初期化（ファイル配列はリセットしない）
+function clearAllPreviousState() {
+    if (resultCheckTimer !== null) {
+        clearInterval(resultCheckTimer);
+        resultCheckTimer = null;
+    }
+
+    document.getElementById('res-name').innerText = "-";
+    document.getElementById('res-purchase-advice').innerText = "-";
+    document.getElementById('res-price').innerText = "-";
+    document.getElementById('res-stars').innerText = "-";
+    document.getElementById('res-yahoo-advice').innerText = "-";
+    
+    document.getElementById('marketBtn').style.display = 'none';
+    document.getElementById('result-box').style.display = 'none';
+    document.getElementById('loading').style.display = 'none';
+    
+    document.getElementById('submitBtn').disabled = false;
+}
+
+// ファイル選択・撮影時の処理（順番に追記していく処理）
+function handleFileSelect(input) {
+    if (!input.files || input.files.length === 0) return;
+    
+    const newFiles = Array.from(input.files);
+    
+    // 既存の配列に追加（最大6枚まで）
+    for (let file of newFiles) {
+        if (selectedFilesArray.length < 6) {
+            selectedFilesArray.push(file);
+        } else {
+            alert("画像は最大6枚までしか登録できません。");
+            break;
+        }
+    }
+
+    // 画面上のグリッド描画を更新
+    renderImageGrid();
+
+    // 次回の撮影・選択に備えて input の値をクリア（同じ操作の連続検知用）
+    input.value = "";
+}
+
+// グリッド描画用の共通処理
+function renderImageGrid() {
+    // 1〜6の全ボックスを一度クリア
+    for (let i = 1; i <= 6; i++) {
+        const box = document.getElementById(`box${i}`);
+        const existingImg = box.querySelector('img');
+        if (existingImg) existingImg.remove();
+        box.querySelector('.icon').style.display = 'block';
+    }
+
+    // 保持している配列の順番通りに画像を描画
+    selectedFilesArray.forEach((file, index) => {
+        const box = document.getElementById(`box${index + 1}`);
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        box.appendChild(img);
+        box.querySelector('.icon').style.display = 'none';
+    });
+}
+
+// 画像のリサイズ・Base64変換
+function resizeAndGetBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                let width = img.width;
+                let height = img.height;
+                const max_size = 1200;
+
+                if (width > height) {
+                    if (width > max_size) { height *= max_size / width; width = max_size; }
+                } else {
+                    if (height > max_size) { width *= max_size / height; height = max_size; }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                resolve(dataUrl.split(',')[1]);
+            };
+            img.src = e.target.result;
+        };
+        reader.onerror = error => reject(error);
+        reader.readAsDataURL(file);
+    });
+}
+
+// 分析スタート
+async function startAnalysis() {
+    if (selectedFilesArray.length === 0) {
+        alert('最低1枚は画像を選んでください！');
+        return;
+    }
+
+    if (!globalLineId) {
+        alert('LINE IDを取得中です。数秒待ってから再度「分析スタート」を押してください。');
+        return;
+    }
+    
+    const btn = document.getElementById('submitBtn');
+    const loading = document.getElementById('loading');
+    const resultBox = document.getElementById('result-box');
+    const comment = document.getElementById('userComment').value;
+    
+    btn.disabled = true;
+    loading.style.display = 'block';
+    resultBox.style.display = 'none';
+    document.getElementById('loading-text').innerText = "画像を圧縮・送信中...";
+
+    try {
+        const filesToSend = [];
+        for (let i = 0; i < selectedFilesArray.length; i++) {
+            const f = selectedFilesArray[i];
+            const b64 = await resizeAndGetBase64(f);
+            filesToSend.push({ image: b64, name: f.name });
+        }
+        
+        document.getElementById('loading-text').innerText = "AIが分析しています（約20〜30秒）";
+
+        const requestId = createRequestId();
+        const payload = {
+            requestId: requestId,
+            lineId: globalLineId,
+            comment: comment, 
+            files: filesToSend 
+        };
+        const formBody = 'data=' + encodeURIComponent(JSON.stringify(payload));
+        
+        // POST送信実行
+        fetch(GAS_SATEI_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: formBody
+        }).catch(err => console.log("POST送信完了・非同期処理開始"));
+
+        // すぐにポーリング（結果確認）を開始
+        checkResultInterval(requestId);
+
+    } catch (error) {
+        alert('エラーが発生しました: ' + error.toString());
+        btn.disabled = false;
+        loading.style.display = 'none';
+    }
+}
+
+// ポーリング（結果確認）処理
+function checkResultInterval(requestId) {
+    let attemptCount = 0;
+    
+    if (resultCheckTimer !== null) { 
+        clearInterval(resultCheckTimer); 
+        resultCheckTimer = null; 
+    }
+
+    // 2秒毎にGASへ問い合わせ
+    resultCheckTimer = setInterval(async () => {
+        attemptCount++;
+        
+        // 最大120秒（60回）待機
+        if (attemptCount > 60) { 
+            clearInterval(resultCheckTimer);
+            resultCheckTimer = null;
+            alert("処理がタイムアウトしました。しばらく経ってから再度お試しください。");
+            document.getElementById('submitBtn').disabled = false;
+            document.getElementById('loading').style.display = 'none';
+            return;
+        }
+
+        try {
+            const response = await fetch(GAS_SATEI_URL + "?check=true&requestId=" + encodeURIComponent(requestId), { cache: "no-store" });
+            const result = await response.json();
+            
+            if (result.status === "processing") {
+                return; // まだ処理中の場合は次回のインターバルへ
+            }
+
+            if (result.status === "success") {
+                clearInterval(resultCheckTimer);
+                resultCheckTimer = null;
+                
+                document.getElementById('res-name').innerText = result.productName || "不明";
+                document.getElementById('res-purchase-advice').innerText = result.purchase_advice || "-";
+                document.getElementById('res-price').innerText = result.price_range || "-";
+                document.getElementById('res-stars').innerText = result.starRating || "-";
+                document.getElementById('res-yahoo-advice').innerText = result.yahoo_advice || "-";
+                
+                const mBtn = document.getElementById('marketBtn');
+                if (result.searchUrl) { 
+                    mBtn.href = result.searchUrl; 
+                    mBtn.style.display = 'block'; 
+                } else { 
+                    mBtn.style.display = 'none'; 
+                }
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('submitBtn').disabled = false;
+                
+                const rBox = document.getElementById('result-box'); 
+                rBox.style.display = 'block'; 
+                rBox.scrollIntoView({ behavior: 'smooth' });
+            }
+
+            if (result.status === "error") {
+                clearInterval(resultCheckTimer);
+                resultCheckTimer = null;
+                
+                alert(result.message || "エラーが発生しました。");
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('submitBtn').disabled = false;
+            }
+        } catch (e) { 
+            console.log("応答確認中..."); 
+        }
+    }, 2000);
+}
+</script>
+</body>
+</html>

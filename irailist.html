@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>出品依頼一覧・編集</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8f9fa; padding: 15px; color: #333; margin: 0; }
+        .container { max-width: 500px; margin: 0 auto; background: #fff; padding: 25px 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        h2 { text-align: center; color: #2c3e50; margin-bottom: 20px; font-size: 20px; font-weight: 700; }
+        #loading { text-align: center; margin-top: 15px; font-weight: bold; color: #4a5568; }
+        
+        /* リストスタイル */
+        .result-list { margin-top: 10px; }
+        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 10px; border-bottom: 1px solid #e2e8f0; }
+        .item-info { flex: 1; padding-right: 10px; }
+        .item-date { font-size: 11px; color: #718096; }
+        .item-title { font-size: 14px; font-weight: bold; color: #2d3748; margin-top: 2px; }
+        .detail-btn { background-color: #3182ce; color: white; border: none; padding: 8px 12px; font-size: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+        
+        /* モーダル */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; }
+        .modal-content { background: white; width: 90%; max-width: 450px; max-height: 85vh; overflow-y: auto; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); position: relative; box-sizing: border-box; }
+        .close-btn { position: absolute; top: 10px; right: 15px; font-size: 24px; font-weight: bold; color: #a0aec0; cursor: pointer; }
+        .result-title { font-size: 18px; font-weight: bold; color: #2d3748; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px; }
+        
+        /* フォームエレメント */
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 13px; color: #4a5568; }
+        .readonly-field { background-color: #edf2f7; padding: 10px; border-radius: 8px; font-size: 14px; font-weight: bold; color: #2d3748; border: 1px solid #e2e8f0; word-break: break-all; }
+        input[type="number"], textarea { width: 100%; padding: 10px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
+        textarea { resize: vertical; min-height: 70px; }
+        
+        /* ラジオボタンエリア */
+        .radio-option { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; color: #2d3748; }
+        .inline-input { width: 70px !important; display: inline-block; padding: 4px 8px !important; margin: 0 4px; }
+
+        /* ボタン */
+        .submit-btn { width: 100%; background-color: #38a169; color: white; border: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 15px; }
+        .submit-btn:disabled { background-color: #cbd5e0; cursor: not-allowed; }
+        .cancel-btn { width: 100%; background-color: #e53e3e; color: white; border: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 10px; }
+        .cancel-btn:disabled { background-color: #cbd5e0; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>📦 出品依頼一覧</h2>
+    <div id="loading">読み込み中...</div>
+    <div class="result-list" id="resultList"></div>
+</div>
+
+<!-- 詳細・編集モーダル -->
+<div class="modal" id="detailModal">
+    <div class="modal-content">
+        <span class="close-btn" onclick="closeModal()">&times;</span>
+        <div class="result-title">📝 出品依頼詳細・編集</div>
+        
+        <div class="form-group">
+            <label>📅 依頼日時（修正不可）</label>
+            <div class="readonly-field" id="modal-date">-</div>
+        </div>
+
+        <div class="form-group">
+            <label>📦 商品名（修正不可）</label>
+            <div class="readonly-field" id="modal-productName">-</div>
+        </div>
+
+        <div class="form-group">
+            <label>💰 初期出品価格</label>
+            <input type="number" id="initialPrice" placeholder="例: 15000">
+        </div>
+
+        <div class="form-group">
+            <label>⚙️ 初回以降価格設定</label>
+            <div class="radio-option">
+                <input type="radio" id="priceStrategy1" name="priceStrategy" value="maintain" checked>
+                <label for="priceStrategy1" style="display:inline; margin:0; font-weight:normal;">初期価格を維持</label>
+            </div>
+            <div class="radio-option">
+                <input type="radio" id="priceStrategy2" name="priceStrategy" value="discount">
+                <label for="priceStrategy2" style="display:inline; margin:0; font-weight:normal;">初期価格から</label>
+                <input type="number" id="discountPercent" class="inline-input" placeholder="10" oninput="document.getElementById('priceStrategy2').checked = true;">
+                <span>％ずつ下げる</span>
+            </div>
+            <div class="radio-option">
+                <input type="radio" id="priceStrategy3" name="priceStrategy" value="omakase">
+                <label for="priceStrategy3" style="display:inline; margin:0; font-weight:normal;">おまかせ 最低出品価格</label>
+                <input type="number" id="minPrice" class="inline-input" style="width: 90px !important;" placeholder="5000" oninput="document.getElementById('priceStrategy3').checked = true;">
+                <span>円</span>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>📦 数量</label>
+            <input type="number" id="itemQuantity" placeholder="例: 1">
+        </div>
+
+        <div class="form-group">
+            <label>📝 備考</label>
+            <textarea id="itemRemarks" placeholder="特記事項があれば入力してください"></textarea>
+        </div>
+        
+        <button class="submit-btn" id="submitUpdateBtn" onclick="submitUpdate()">修正送信</button>
+        <button class="cancel-btn" id="cancelExhibitBtn" onclick="cancelExhibit()">出品取消</button>
+    </div>
+</div>
+
+<script>
+// デプロイしたGASのWebアプリURLを設定してください
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxHCW8Mn2HfhVYeXPYdskJBRG25tKO_CGF3fCO-HT9ozccc0m3RO1ra-7Uh_A-xqfQD/exec";
+// LIFF IDを設定してください
+const LIFF_ID = "2011480421-LtZOYgTd";
+
+let globalLineId = null;
+let exhibitListData = [];
+let selectedIndex = null;
+
+// LINE LIFFの初期化
+window.onload = function() {
+    liff.init({ liffId: LIFF_ID })
+        .then(() => {
+            if (liff.isLoggedIn()) {
+                return liff.getProfile();
+            } else {
+                liff.login();
+            }
+        })
+        .then(profile => {
+            if (profile) {
+                globalLineId = profile.userId;
+                fetchExhibitList();
+            }
+        })
+        .catch(err => {
+            console.error("LINE初期化エラー: " + err.toString());
+            document.getElementById('loading').innerText = "LINE認証エラーが発生しました。";
+        });
+};
+
+// 一覧取得
+async function fetchExhibitList() {
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('resultList').innerHTML = '';
+
+    const payload = {
+        lineId: globalLineId,
+        action: "get_list"
+    };
+
+    try {
+        const res = await fetch(GAS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: 'data=' + encodeURIComponent(JSON.stringify(payload))
+        });
+        
+        const data = await res.json();
+        
+        if (data.status === "success") {
+            exhibitListData = data.results;
+            renderList(data.results);
+        } else {
+            alert(data.message || "データ取得に失敗しました。");
+        }
+    } catch (e) {
+        alert("エラーが発生しました: " + e.toString());
+    } finally {
+        document.getElementById('loading').style.display = 'none';
+    }
+}
+
+// リスト描画
+function renderList(list) {
+    const container = document.getElementById('resultList');
+    container.innerHTML = '';
+
+    if (list.length === 0) {
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:#718096;">出品依頼データがありません。</div>';
+        return;
+    }
+
+    list.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = 'list-item';
+        div.innerHTML = `
+            <div class="item-info">
+                <div class="item-date">${item.date}</div>
+                <div class="item-title">${item.productName}</div>
+            </div>
+            <button class="detail-btn" onclick="showDetail(${index})">詳細表示</button>
+        `;
+        container.appendChild(div);
+    });
+}
+
+// 詳細・編集モーダル表示
+function showDetail(index) {
+    selectedIndex = index;
+    const item = exhibitListData[index];
+
+    document.getElementById('modal-date').innerText = item.date || "-";
+    document.getElementById('modal-productName').innerText = item.productName || "-";
+    
+    // 数値データの反映（"-" 等が入っている場合は空欄化）
+    document.getElementById('initialPrice').value = (item.initialPrice && item.initialPrice !== "-") ? item.initialPrice : '';
+    document.getElementById('itemQuantity').value = (item.quantity && item.quantity !== "-") ? item.quantity : '';
+    document.getElementById('itemRemarks').value = (item.remarks && item.remarks !== "-") ? item.remarks : '';
+
+    // 価格設定文字列の解析とラジオボタン状態復元
+    const strategy = item.priceStrategy || "";
+    document.getElementById('discountPercent').value = '';
+    document.getElementById('minPrice').value = '';
+
+    if (strategy.includes("%ずつ下げる")) {
+        document.getElementById('priceStrategy2').checked = true;
+        const match = strategy.match(/(\d+)%/);
+        if (match) document.getElementById('discountPercent').value = match[1];
+    } else if (strategy.includes("おまかせ")) {
+        document.getElementById('priceStrategy3').checked = true;
+        const match = strategy.match(/最低価格:\s*(\d+)円/);
+        if (match) document.getElementById('minPrice').value = match[1];
+    } else {
+        document.getElementById('priceStrategy1').checked = true;
+    }
+
+    document.getElementById('detailModal').style.display = 'flex';
+}
+
+// 修正送信処理
+async function submitUpdate() {
+    if (selectedIndex === null) return;
+
+    const item = exhibitListData[selectedIndex];
+    
+    let initialPrice = document.getElementById('initialPrice').value.trim();
+    if (!initialPrice) initialPrice = "-";
+
+    let priceStrategyText = "初期価格を維持";
+    const selectedStrategy = document.querySelector('input[name="priceStrategy"]:checked').value;
+    if (selectedStrategy === "discount") {
+        const percent = document.getElementById('discountPercent').value.trim();
+        priceStrategyText = percent ? `初期価格から${percent}%ずつ下げる` : "初期価格から値下げ";
+    } else if (selectedStrategy === "omakase") {
+        const minP = document.getElementById('minPrice').value.trim();
+        priceStrategyText = minP ? `おまかせ（最低価格: ${minP}円）` : "おまかせ";
+    }
+
+    let quantity = document.getElementById('itemQuantity').value.trim();
+    if (!quantity) quantity = "1";
+
+    let remarks = document.getElementById('itemRemarks').value.trim();
+    if (!remarks) remarks = "-";
+
+    const btn = document.getElementById('submitUpdateBtn');
+    const cancelBtn = document.getElementById('cancelExhibitBtn');
+    btn.disabled = true;
+    cancelBtn.disabled = true;
+    btn.innerText = "送信中...";
+
+    const payload = {
+        action: "update_exhibit",
+        lineId: globalLineId,
+        rowIndex: item.rowIndex,
+        initialPrice: initialPrice,
+        priceStrategy: priceStrategyText,
+        quantity: quantity,
+        remarks: remarks
+    };
+
+    try {
+        const res = await fetch(GAS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: 'data=' + encodeURIComponent(JSON.stringify(payload))
+        });
+
+        const data = await res.json();
+
+        if (data.status === "success") {
+            alert("修正を保存しました。");
+            closeModal();
+            fetchExhibitList(); // 再読み込みして最新化
+        } else {
+            alert(data.message || "更新に失敗しました。");
+        }
+    } catch (e) {
+        alert("エラーが発生しました: " + e.toString());
+    } finally {
+        btn.disabled = false;
+        cancelBtn.disabled = false;
+        btn.innerText = "修正送信";
+    }
+}
+
+// 出品取消処理
+async function cancelExhibit() {
+    if (selectedIndex === null) return;
+
+    const item = exhibitListData[selectedIndex];
+
+    if (!confirm(`「${item.productName}」の出品依頼を取り消しますか？`)) {
+        return;
+    }
+
+    const btn = document.getElementById('submitUpdateBtn');
+    const cancelBtn = document.getElementById('cancelExhibitBtn');
+    btn.disabled = true;
+    cancelBtn.disabled = true;
+    cancelBtn.innerText = "処理中...";
+
+    const payload = {
+        action: "cancel_exhibit",
+        lineId: globalLineId,
+        rowIndex: item.rowIndex
+    };
+
+    try {
+        const res = await fetch(GAS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: 'data=' + encodeURIComponent(JSON.stringify(payload))
+        });
+
+        const data = await res.json();
+
+        if (data.status === "success") {
+            alert("出品依頼を取り消しました。");
+            closeModal();
+            fetchExhibitList(); // 再読み込みして最新化
+        } else {
+            alert(data.message || "取消処理に失敗しました。");
+        }
+    } catch (e) {
+        alert("エラーが発生しました: " + e.toString());
+    } finally {
+        btn.disabled = false;
+        cancelBtn.disabled = false;
+        cancelBtn.innerText = "出品取消";
+    }
+}
+
+// モーダル閉じる
+function closeModal() {
+    document.getElementById('detailModal').style.display = 'none';
+}
+</script>
+</body>
+</html>

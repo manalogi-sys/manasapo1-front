@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>過去データ検索・閲覧</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8f9fa; padding: 15px; color: #333; margin: 0; }
+        .container { max-width: 500px; margin: 0 auto; background: #fff; padding: 25px 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        h2 { text-align: center; color: #2c3e50; margin-bottom: 20px; font-size: 20px; font-weight: 700; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: bold; margin-bottom: 6px; font-size: 13px; color: #4a5568; }
+        input[type="date"], input[type="text"], input[type="number"], textarea { width: 100%; padding: 10px; background: #f7fafc; border: 1px solid #e2e8f0; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
+        textarea { resize: vertical; min-height: 70px; }
+        .date-range { display: flex; gap: 8px; align-items: center; }
+
+        /* 期間クイック選択ボタン */
+        .quick-range { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .quick-btn { flex: 1 1 auto; min-width: 56px; background: #ebf4ff; color: #2b6cb0; border: 1px solid #bee3f8; padding: 8px 6px; font-size: 13px; font-weight: bold; border-radius: 20px; cursor: pointer; white-space: nowrap; }
+        .quick-btn.active { background: #3182ce; color: #fff; border-color: #3182ce; }
+        .search-btn { width: 100%; background-color: #3182ce; color: white; border: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 10px; }
+        .search-btn:disabled { background-color: #cbd5e0; cursor: not-allowed; }
+        #loading { display: none; text-align: center; margin-top: 15px; font-weight: bold; color: #4a5568; }
+        
+        /* 検索結果リスト */
+        .result-list { margin-top: 20px; }
+        .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 10px; border-bottom: 1px solid #e2e8f0; }
+        .item-info { flex: 1; padding-right: 10px; }
+        .item-date { font-size: 11px; color: #718096; }
+        .item-title { font-size: 14px; font-weight: bold; color: #2d3748; margin-top: 2px; }
+        .btn-group { display: flex; gap: 6px; }
+        .detail-btn { background-color: #b794f4; color: white; border: none; padding: 8px 10px; font-size: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+        .exhibit-btn { background-color: #dd6b20; color: white; border: none; padding: 8px 10px; font-size: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+        .cancel-btn { background-color: #e53e3e; color: white; border: none; padding: 8px 10px; font-size: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; white-space: nowrap; }
+        
+        /* モーダル */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 100; justify-content: center; align-items: center; }
+        .modal-content { background: white; width: 90%; max-width: 450px; max-height: 85vh; overflow-y: auto; padding: 20px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); position: relative; box-sizing: border-box; }
+        .close-btn { position: absolute; top: 10px; right: 15px; font-size: 24px; font-weight: bold; color: #a0aec0; cursor: pointer; }
+        
+        /* 詳細表示スタイル */
+        .result-title { font-size: 18px; font-weight: bold; color: #2d3748; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-bottom: 15px; }
+        .result-item { margin-bottom: 18px; }
+        .result-label { font-size: 12px; color: #4a5568; font-weight: bold; background: #edf2f7; padding: 4px 8px; border-radius: 4px; display: inline-block; margin-bottom: 6px; }
+        .result-value { font-size: 15px; color: #1a202c; font-weight: 500; line-height: 1.6; white-space: pre-wrap; }
+        .price-highlight { font-size: 22px; color: #e53e3e; font-weight: bold; }
+        #marketBtn { display: block; width: 100%; text-align: center; box-sizing: border-box; background-color: #38a169; color: white; text-decoration: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 8px; margin-top: 15px; }
+        
+        /* ラジオボタンエリア */
+        .radio-option { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; color: #2d3748; }
+        .inline-input { width: 70px !important; display: inline-block; padding: 4px 8px !important; margin: 0 4px; }
+
+        /* 送信ボタン */
+        .submit-btn { width: 100%; background-color: #38a169; color: white; border: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 15px; }
+        .submit-btn:disabled { background-color: #cbd5e0; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>過去データ検索・閲覧</h2>
+    
+    <div class="form-group">
+        <label>📅 期間・日付指定</label>
+        <div class="date-range">
+            <input type="date" id="startDate">
+            <span>〜</span>
+            <input type="date" id="endDate">
+        </div>
+        <div class="quick-range" id="quickRange">
+            <button type="button" class="quick-btn" data-range="today">今日</button>
+            <button type="button" class="quick-btn" data-range="1week">過去1週間</button>
+            <button type="button" class="quick-btn" data-range="1month">過去1ヶ月</button>
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label>🔍 商品名（キーワード）</label>
+        <input type="text" id="keyword" placeholder="例: ヴィトン、ロレックス">
+    </div>
+    
+    <button class="search-btn" id="searchBtn" onclick="executeSearch()">データ抽出</button>
+    
+    <div id="loading">検索中...</div>
+
+    <div class="result-list" id="resultList"></div>
+</div>
+
+<!-- 詳細モーダル -->
+<div class="modal" id="detailModal">
+    <div class="modal-content">
+        <span class="close-btn" onclick="closeModal('detailModal')">&times;</span>
+        <div class="result-title">📊 分析結果詳細</div>
+        
+        <div class="result-item">
+            <div class="result-label">特定された商品名</div>
+            <div class="result-value" id="res-name" style="font-weight: bold;">-</div>
+        </div>
+
+        <div class="result-item">
+            <div class="result-label" style="background-color: #feebc8; color: #c05621;">💡 買取専門店向けアドバイス</div>
+            <div class="result-value" id="res-purchase-advice">-</div>
+        </div>
+
+        <hr style="border: 0; border-top: 1px dashed #e2e8f0; margin: 20px 0;">
+
+        <div class="result-item">
+            <div class="result-label">ヤフオク落札相場予想価格帯</div>
+            <div class="result-value price-highlight" id="res-price">-</div>
+        </div>
+        
+        <div class="result-item">
+            <div class="result-label" style="background-color: #e9d8fd; color: #6b46c1;">🔨 ヤフオク出品アドバイス</div>
+            <div class="result-value" id="res-yahoo-advice">-</div>
+        </div>
+        
+        <a id="marketBtn" href="#" target="_blank" style="display: none;">📊 ヤフオク落札相場を直接確認</a>
+    </div>
+</div>
+
+<!-- 出品依頼モーダル -->
+<div class="modal" id="exhibitModal">
+    <div class="modal-content">
+        <span class="close-btn" onclick="closeModal('exhibitModal')">&times;</span>
+        <div class="result-title">📦 出品依頼</div>
+        
+        <div class="result-item">
+            <div class="result-label">商品名</div>
+            <div class="result-value" id="exhibit-product-name" style="font-weight: bold;">-</div>
+        </div>
+
+        <div class="form-group">
+            <label>💰 初期出品価格（任意）</label>
+            <input type="number" id="initialPrice" placeholder="例: 15000">
+        </div>
+
+        <div class="form-group">
+            <label>⚙️ 初回以降価格設定（任意）</label>
+            <div class="radio-option">
+                <input type="radio" id="priceStrategy1" name="priceStrategy" value="maintain" checked>
+                <label for="priceStrategy1" style="display:inline; margin:0; font-weight:normal;">初期価格を維持</label>
+            </div>
+            <div class="radio-option">
+                <input type="radio" id="priceStrategy2" name="priceStrategy" value="discount">
+                <label for="priceStrategy2" style="display:inline; margin:0; font-weight:normal;">初期価格から</label>
+                <input type="number" id="discountPercent" class="inline-input" placeholder="10" oninput="document.getElementById('priceStrategy2').checked = true;">
+                <span>％ずつ下げる</span>
+            </div>
+            <div class="radio-option">
+                <input type="radio" id="priceStrategy3" name="priceStrategy" value="omakase">
+                <label for="priceStrategy3" style="display:inline; margin:0; font-weight:normal;">おまかせ 最低出品価格</label>
+                <input type="number" id="minPrice" class="inline-input" style="width: 90px !important;" placeholder="5000" oninput="document.getElementById('priceStrategy3').checked = true;">
+                <span>円</span>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>📦 商品数（複数個ある場合に入力）</label>
+            <input type="number" id="itemQuantity" placeholder="例: 2">
+        </div>
+
+        <div class="form-group">
+            <label>📝 備考</label>
+            <textarea id="itemRemarks" placeholder="特記事項があれば入力してください"></textarea>
+        </div>
+        
+        <button class="submit-btn" id="submitExhibitBtn" onclick="submitExhibitRequest()">送信する</button>
+    </div>
+</div>
+
+<script>
+const GAS_SEARCH_URL = "https://script.google.com/macros/s/AKfycbzWTBjlsMk13LvUfiq2pr0PZ2-UPyKD-8Bmi2lc6OFkNckNrBhTsjJKZnqFVb0fV2JR/exec";
+
+let globalLineId = null;
+let searchResultsData = [];
+let selectedIndex = null;
+
+// LINE LIFFの初期化
+window.onload = function() {
+    liff.init({ liffId: "2011480421-iWstUz1i" })
+        .then(() => {
+            if (liff.isLoggedIn()) {
+                return liff.getProfile();
+            } else {
+                liff.login();
+            }
+        })
+        .then(profile => {
+            if (profile) globalLineId = profile.userId;
+        })
+        .catch(err => console.error("LINE初期化エラー: " + err.toString()));
+};
+
+// 日付を yyyy-mm-dd 形式に（端末のローカル時刻で計算）
+function formatDate(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+}
+
+// 期間クイック選択：日付欄に入れてそのまま抽出
+function applyQuickRange(range) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    let start = new Date(today);
+    let end = new Date(today);
+
+    if (range === '1week') {
+        // 今日を含めた7日間（例: 10/20 → 10/14〜10/20）
+        start.setDate(today.getDate() - 6);
+    } else if (range === '1month') {
+        // 今日を含めた1ヶ月（例: 10/20 → 9/21〜10/20）
+        start.setMonth(today.getMonth() - 1);
+        if (start.getDate() !== today.getDate()) start.setDate(0); // 3/31→2/31のような存在しない日は月末に
+        start.setDate(start.getDate() + 1);
+    }
+
+    document.getElementById('startDate').value = formatDate(start);
+    document.getElementById('endDate').value = formatDate(end);
+
+    document.querySelectorAll('.quick-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.range === range);
+    });
+
+    executeSearch();
+}
+
+document.querySelectorAll('.quick-btn').forEach(btn => {
+    btn.addEventListener('click', () => applyQuickRange(btn.dataset.range));
+});
+
+// 日付を手入力したらクイック選択の強調を外す
+['startDate', 'endDate'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+        document.querySelectorAll('.quick-btn').forEach(b => b.classList.remove('active'));
+    });
+});
+
+// 検索実行
+async function executeSearch() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    const keyword = document.getElementById('keyword').value.trim();
+
+    if (!startDate && !endDate && !keyword) {
+        alert("期間・日付、または商品名キーワードのどちらかを入力してください。");
+        return;
+    }
+
+    if (!globalLineId) {
+        alert("LINE IDを取得中です。数秒待ってから再度押してください。");
+        return;
+    }
+
+    document.getElementById('searchBtn').disabled = true;
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('resultList').innerHTML = '';
+
+    const payload = {
+        lineId: globalLineId,
+        startDate: startDate,
+        endDate: endDate,
+        keyword: keyword,
+        action: "search"
+    };
+
+    try {
+        const res = await fetch(GAS_SEARCH_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: 'data=' + encodeURIComponent(JSON.stringify(payload))
+        });
+        
+        const data = await res.json();
+        
+        if (data.status === "success") {
+            searchResultsData = data.results;
+            renderList(data.results);
+        } else {
+            alert(data.message || "データ取得に失敗しました。");
+        }
+    } catch (e) {
+        alert("エラーが発生しました: " + e.toString());
+    } finally {
+        document.getElementById('searchBtn').disabled = false;
+        document.getElementById('loading').style.display = 'none';
+    }
+}
+
+// 検索結果リストの描画
+function renderList(list) {
+    const container = document.getElementById('resultList');
+    container.innerHTML = '';
+
+    if (list.length === 0) {
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:#718096;">該当するデータが見つかりませんでした。</div>';
+        return;
+    }
+
+    list.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = 'list-item';
+        
+        let actionBtnHtml = '';
+        if (item.isExhibited) {
+            actionBtnHtml = `<button class="cancel-btn" onclick="cancelExhibitRequest(${index})">出品取消</button>`;
+        } else {
+            actionBtnHtml = `<button class="exhibit-btn" onclick="showExhibitModal(${index})">出品依頼</button>`;
+        }
+
+        div.innerHTML = `
+            <div class="item-info">
+                <div class="item-date">${item.timestamp}</div>
+                <div class="item-title">${item.productName}</div>
+            </div>
+            <div class="btn-group">
+                <button class="detail-btn" onclick="showDetail(${index})">詳細表示</button>
+                ${actionBtnHtml}
+            </div>
+        `;
+        container.appendChild(div);
+    });
+}
+
+// 詳細表示（モーダル）
+function showDetail(index) {
+    const item = searchResultsData[index];
+    document.getElementById('res-name').innerText = item.productName || "-";
+    document.getElementById('res-purchase-advice').innerText = item.purchase_advice || "-";
+    document.getElementById('res-price').innerText = item.price_range || "-";
+    document.getElementById('res-yahoo-advice').innerText = item.yahoo_advice || "-";
+
+    const mBtn = document.getElementById('marketBtn');
+    if (item.searchUrl) {
+        mBtn.href = item.searchUrl;
+        mBtn.style.display = 'block';
+    } else {
+        mBtn.style.display = 'none';
+    }
+
+    document.getElementById('detailModal').style.display = 'flex';
+}
+
+// 出品依頼モーダル表示
+function showExhibitModal(index) {
+    selectedIndex = index;
+    const item = searchResultsData[index];
+    document.getElementById('exhibit-product-name').innerText = item.productName || "";
+    document.getElementById('initialPrice').value = '';
+    document.getElementById('priceStrategy1').checked = true;
+    document.getElementById('discountPercent').value = '';
+    document.getElementById('minPrice').value = '';
+    document.getElementById('itemQuantity').value = '';
+    document.getElementById('itemRemarks').value = '';
+    document.getElementById('exhibitModal').style.display = 'flex';
+}
+
+// 出品依頼送信処理
+async function submitExhibitRequest() {
+    let initialPrice = document.getElementById('initialPrice').value.trim();
+    if (!initialPrice) initialPrice = "-";
+
+    // 初回以降価格設定の文字列生成
+    let priceStrategyText = "初期価格を維持";
+    const selectedStrategy = document.querySelector('input[name="priceStrategy"]:checked').value;
+    if (selectedStrategy === "discount") {
+        const percent = document.getElementById('discountPercent').value.trim();
+        priceStrategyText = percent ? `初期価格から${percent}%ずつ下げる` : "初期価格から値下げ";
+    } else if (selectedStrategy === "omakase") {
+        const minP = document.getElementById('minPrice').value.trim();
+        priceStrategyText = minP ? `おまかせ（最低価格: ${minP}円）` : "おまかせ";
+    }
+
+    let quantity = document.getElementById('itemQuantity').value.trim();
+    if (!quantity) quantity = "1";
+
+    let remarks = document.getElementById('itemRemarks').value.trim();
+    if (!remarks) remarks = "-";
+
+    if (!globalLineId || selectedIndex === null) {
+        alert("エラーが発生しました。再度やり直してください。");
+        return;
+    }
+
+    const item = searchResultsData[selectedIndex];
+    const btn = document.getElementById('submitExhibitBtn');
+    btn.disabled = true;
+    btn.innerText = "送信中...";
+
+    const payload = {
+        action: "request_exhibit",
+        lineId: globalLineId,
+        productName: item.productName,
+        initialPrice: initialPrice,
+        priceStrategy: priceStrategyText,
+        quantity: quantity,
+        remarks: remarks
+    };
+
+    try {
+        const res = await fetch(GAS_SEARCH_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: 'data=' + encodeURIComponent(JSON.stringify(payload))
+        });
+
+        const data = await res.json();
+
+        if (data.status === "success") {
+            alert("出品依頼を送信しました。");
+            item.isExhibited = true;
+            renderList(searchResultsData);
+            closeModal('exhibitModal');
+        } else if (data.status === "uncontracted") {
+            alert(data.message);
+        } else {
+            alert(data.message || "送信に失敗しました。");
+        }
+    } catch (e) {
+        alert("エラーが発生しました: " + e.toString());
+    } finally {
+        btn.disabled = false;
+        btn.innerText = "送信する";
+    }
+}
+
+// 出品取消処理
+async function cancelExhibitRequest(index) {
+    const item = searchResultsData[index];
+
+    if (!confirm(`「${item.productName}」の出品依頼を取り消しますか？`)) {
+        return;
+    }
+
+    if (!globalLineId) {
+        alert("LINE IDを取得できていません。");
+        return;
+    }
+
+    const payload = {
+        action: "cancel_exhibit",
+        lineId: globalLineId,
+        productName: item.productName
+    };
+
+    try {
+        const res = await fetch(GAS_SEARCH_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+            body: 'data=' + encodeURIComponent(JSON.stringify(payload))
+        });
+
+        const data = await res.json();
+
+        if (data.status === "success") {
+            alert("出品依頼を取り消しました。");
+            item.isExhibited = false;
+            renderList(searchResultsData);
+        } else {
+            alert(data.message || "取消処理に失敗しました。");
+        }
+    } catch (e) {
+        alert("エラーが発生しました: " + e.toString());
+    }
+}
+
+// モーダル閉じる
+function closeModal(modalId) {
+    document.getElementById(modalId).style.display = 'none';
+}
+</script>
+</body>
+</html>
