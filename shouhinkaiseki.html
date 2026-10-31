@@ -114,6 +114,7 @@
 
 <script>
 const GAS_SATEI_URL = "https://script.google.com/macros/s/AKfycbx1usijBw87uSJAwAC4oQLP1sWQPIISP1j5mdrKq_--D7h7eV3m-1zc30zpPhorUwZV/exec";
+const LIFF_ID = "2011480421-IuqiIUBK";
 
 let globalLineId = null;
 let selectedFilesArray = [];
@@ -132,7 +133,7 @@ function createRequestId() {
 
 // LINE LIFFの初期化
 window.onload = function() {
-    liff.init({ liffId: "2011480421-IuqiIUBK" })
+    liff.init({ liffId: LIFF_ID })
         .then(() => {
             if (liff.isLoggedIn()) {
                 return liff.getProfile();
@@ -162,6 +163,47 @@ function showAuthError() {
     document.querySelector('.upload-trigger-btn').classList.add('disabled');
     document.getElementById('bulkFiles').disabled = true;
 }
+
+// ===== 本人確認(なりすまし対策) =====
+// GASに送るデータには、LINEが発行した本人証明書(IDトークン)を必ず付ける。
+// GASはこれをLINEに確認してから処理するので、他人のLINE IDを名乗っても使えない。
+// (3ページ共通。直すときは irailist / searchresult / shouhinkaiseki を同じように直す)
+function withIdToken(payload) {
+    payload.idToken = liff.getIDToken();
+    return payload;
+}
+
+// GASから「本人確認できない」(期限切れなど)と返ってきたら true を返し、LINEに入り直す
+function isAuthError(data) {
+    if (data && data.status === "auth_error") {
+        // 呼び出し元の後片付け(ボタンを戻す等)が終わってから動かすため、少し後で実行する
+        setTimeout(reauthLine, 0);
+        return true;
+    }
+    return false;
+}
+
+// LINEに入り直して新しい本人証明書を取る
+function reauthLine() {
+    // 何度も開き直しを繰り返さないよう、1分以内の2回目はお知らせを出して止める
+    let last = 0;
+    try { last = Number(sessionStorage.getItem('reauthAt') || 0); } catch (e) {}
+    if (Date.now() - last < 60000) {
+        showAuthError();
+        return;
+    }
+    try { sessionStorage.setItem('reauthAt', String(Date.now())); } catch (e) {}
+
+    if (liff.isInClient()) {
+        // LINEの中:LIFFを開き直すと新しい証明書がもらえる
+        location.href = "https://liff.line.me/" + LIFF_ID;
+    } else {
+        // ホーム画面・ブラウザ:いったんログアウトしてログインし直す
+        liff.logout();
+        liff.login({ redirectUri: location.href });
+    }
+}
+
 
 // 表示状態とタイマーの初期化（ファイル配列はリセットしない）
 function clearAllPreviousState() {
@@ -297,7 +339,7 @@ async function startAnalysis() {
             comment: comment, 
             files: filesToSend 
         };
-        const formBody = 'data=' + encodeURIComponent(JSON.stringify(payload));
+        const formBody = 'data=' + encodeURIComponent(JSON.stringify(withIdToken(payload)));
         
         // POST送信実行
         fetch(GAS_SATEI_URL, {
@@ -343,6 +385,15 @@ function checkResultInterval(requestId) {
             const response = await fetch(GAS_SATEI_URL + "?check=true&requestId=" + encodeURIComponent(requestId), { cache: "no-store" });
             const result = await response.json();
             
+            // 本人確認できなかった(期限切れなど)→ 待つのをやめてLINEに入り直す
+            if (result.status === "auth_error") {
+                clearInterval(resultCheckTimer);
+                resultCheckTimer = null;
+                document.getElementById('loading').style.display = 'none';
+                reauthLine();
+                return;
+            }
+
             if (result.status === "processing") {
                 return; // まだ処理中の場合は次回のインターバルへ
             }

@@ -135,12 +135,58 @@ window.onload = function() {
         })
         .catch(err => {
             console.error("LINE初期化エラー: " + err.toString());
-            // 3ページ共通の文言（商品分析・過去データ検索と同じ）
-            const loadingEl = document.getElementById('loading');
-            loadingEl.innerText = "LINEの認証に失敗しました。\nお手数ですが、画面を閉じてもう一度開き直してください。";
-            loadingEl.style.color = '#c53030';
+            showAuthError();
         });
 };
+
+// LINE認証に失敗したとき:読み込み中の欄にお知らせを出す(3ページ共通の文言)
+function showAuthError() {
+    const loadingEl = document.getElementById('loading');
+    loadingEl.innerText = "LINEの認証に失敗しました。\nお手数ですが、画面を閉じてもう一度開き直してください。";
+    loadingEl.style.color = '#c53030';
+    loadingEl.style.display = 'block';
+    document.getElementById('resultList').innerHTML = '';
+}
+
+// ===== 本人確認(なりすまし対策) =====
+// GASに送るデータには、LINEが発行した本人証明書(IDトークン)を必ず付ける。
+// GASはこれをLINEに確認してから処理するので、他人のLINE IDを名乗っても使えない。
+// (3ページ共通。直すときは irailist / searchresult / shouhinkaiseki を同じように直す)
+function withIdToken(payload) {
+    payload.idToken = liff.getIDToken();
+    return payload;
+}
+
+// GASから「本人確認できない」(期限切れなど)と返ってきたら true を返し、LINEに入り直す
+function isAuthError(data) {
+    if (data && data.status === "auth_error") {
+        // 呼び出し元の後片付け(ボタンを戻す等)が終わってから動かすため、少し後で実行する
+        setTimeout(reauthLine, 0);
+        return true;
+    }
+    return false;
+}
+
+// LINEに入り直して新しい本人証明書を取る
+function reauthLine() {
+    // 何度も開き直しを繰り返さないよう、1分以内の2回目はお知らせを出して止める
+    let last = 0;
+    try { last = Number(sessionStorage.getItem('reauthAt') || 0); } catch (e) {}
+    if (Date.now() - last < 60000) {
+        showAuthError();
+        return;
+    }
+    try { sessionStorage.setItem('reauthAt', String(Date.now())); } catch (e) {}
+
+    if (liff.isInClient()) {
+        // LINEの中:LIFFを開き直すと新しい証明書がもらえる
+        location.href = "https://liff.line.me/" + LIFF_ID;
+    } else {
+        // ホーム画面・ブラウザ:いったんログアウトしてログインし直す
+        liff.logout();
+        liff.login({ redirectUri: location.href });
+    }
+}
 
 // 一覧取得
 async function fetchExhibitList() {
@@ -156,10 +202,11 @@ async function fetchExhibitList() {
         const res = await fetch(GAS_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-            body: 'data=' + encodeURIComponent(JSON.stringify(payload))
+            body: 'data=' + encodeURIComponent(JSON.stringify(withIdToken(payload)))
         });
         
         const data = await res.json();
+        if (isAuthError(data)) return;
         
         if (data.status === "success") {
             exhibitListData = data.results;
@@ -276,10 +323,11 @@ async function submitUpdate() {
         const res = await fetch(GAS_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-            body: 'data=' + encodeURIComponent(JSON.stringify(payload))
+            body: 'data=' + encodeURIComponent(JSON.stringify(withIdToken(payload)))
         });
 
         const data = await res.json();
+        if (isAuthError(data)) return;
 
         if (data.status === "success") {
             alert("修正を保存しました。");
@@ -323,10 +371,11 @@ async function cancelExhibit() {
         const res = await fetch(GAS_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-            body: 'data=' + encodeURIComponent(JSON.stringify(payload))
+            body: 'data=' + encodeURIComponent(JSON.stringify(withIdToken(payload)))
         });
 
         const data = await res.json();
+        if (isAuthError(data)) return;
 
         if (data.status === "success") {
             alert("出品依頼を取り消しました。");

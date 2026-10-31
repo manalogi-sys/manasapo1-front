@@ -178,6 +178,7 @@
 
 <script>
 const GAS_SEARCH_URL = "https://script.google.com/macros/s/AKfycbzWTBjlsMk13LvUfiq2pr0PZ2-UPyKD-8Bmi2lc6OFkNckNrBhTsjJKZnqFVb0fV2JR/exec";
+const LIFF_ID = "2011480421-iWstUz1i";
 
 let globalLineId = null;
 let searchResultsData = [];
@@ -185,7 +186,7 @@ let selectedIndex = null;
 
 // LINE LIFFの初期化
 window.onload = function() {
-    liff.init({ liffId: "2011480421-iWstUz1i" })
+    liff.init({ liffId: LIFF_ID })
         .then(() => {
             if (liff.isLoggedIn()) {
                 return liff.getProfile();
@@ -212,6 +213,47 @@ function showAuthError() {
     document.getElementById('searchBtn').disabled = true;
     document.querySelectorAll('.quick-btn').forEach(b => b.disabled = true);
 }
+
+// ===== 本人確認(なりすまし対策) =====
+// GASに送るデータには、LINEが発行した本人証明書(IDトークン)を必ず付ける。
+// GASはこれをLINEに確認してから処理するので、他人のLINE IDを名乗っても使えない。
+// (3ページ共通。直すときは irailist / searchresult / shouhinkaiseki を同じように直す)
+function withIdToken(payload) {
+    payload.idToken = liff.getIDToken();
+    return payload;
+}
+
+// GASから「本人確認できない」(期限切れなど)と返ってきたら true を返し、LINEに入り直す
+function isAuthError(data) {
+    if (data && data.status === "auth_error") {
+        // 呼び出し元の後片付け(ボタンを戻す等)が終わってから動かすため、少し後で実行する
+        setTimeout(reauthLine, 0);
+        return true;
+    }
+    return false;
+}
+
+// LINEに入り直して新しい本人証明書を取る
+function reauthLine() {
+    // 何度も開き直しを繰り返さないよう、1分以内の2回目はお知らせを出して止める
+    let last = 0;
+    try { last = Number(sessionStorage.getItem('reauthAt') || 0); } catch (e) {}
+    if (Date.now() - last < 60000) {
+        showAuthError();
+        return;
+    }
+    try { sessionStorage.setItem('reauthAt', String(Date.now())); } catch (e) {}
+
+    if (liff.isInClient()) {
+        // LINEの中:LIFFを開き直すと新しい証明書がもらえる
+        location.href = "https://liff.line.me/" + LIFF_ID;
+    } else {
+        // ホーム画面・ブラウザ:いったんログアウトしてログインし直す
+        liff.logout();
+        liff.login({ redirectUri: location.href });
+    }
+}
+
 
 // 日付を yyyy-mm-dd 形式に（端末のローカル時刻で計算）
 function formatDate(d) {
@@ -291,10 +333,11 @@ async function executeSearch() {
         const res = await fetch(GAS_SEARCH_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-            body: 'data=' + encodeURIComponent(JSON.stringify(payload))
+            body: 'data=' + encodeURIComponent(JSON.stringify(withIdToken(payload)))
         });
         
         const data = await res.json();
+        if (isAuthError(data)) return;
         
         if (data.status === "success") {
             searchResultsData = data.results;
@@ -424,10 +467,11 @@ async function submitExhibitRequest() {
         const res = await fetch(GAS_SEARCH_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-            body: 'data=' + encodeURIComponent(JSON.stringify(payload))
+            body: 'data=' + encodeURIComponent(JSON.stringify(withIdToken(payload)))
         });
 
         const data = await res.json();
+        if (isAuthError(data)) return;
 
         if (data.status === "success") {
             alert("出品依頼を送信しました。");
@@ -470,10 +514,11 @@ async function cancelExhibitRequest(index) {
         const res = await fetch(GAS_SEARCH_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-            body: 'data=' + encodeURIComponent(JSON.stringify(payload))
+            body: 'data=' + encodeURIComponent(JSON.stringify(withIdToken(payload)))
         });
 
         const data = await res.json();
+        if (isAuthError(data)) return;
 
         if (data.status === "success") {
             alert("出品依頼を取り消しました。");
