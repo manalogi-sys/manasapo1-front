@@ -35,13 +35,21 @@
         .stars { font-size: 20px; color: #ecc94b; }
         #marketBtn { display: block; width: 100%; text-align: center; box-sizing: border-box; background-color: #38a169; color: white; text-decoration: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 8px; margin-top: 15px; transition: background 0.2s; }
         #marketBtn:hover { background-color: #2f855a; }
+
+        /* LINE認証に失敗したときのお知らせ */
+        #authError { display: none; background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: bold; line-height: 1.6; text-align: center; margin-bottom: 20px; }
+        /* 認証失敗時は画像選択ボタンも押せなくする */
+        .upload-trigger-btn.disabled { background-color: #cbd5e0; box-shadow: none; pointer-events: none; cursor: not-allowed; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2>商品分析・査定サポート</h2>
-    
+
+    <!-- LINE認証に失敗したときだけ表示する -->
+    <div id="authError"></div>
+
     <div class="form-group">
         <div class="upload-trigger-btn" onclick="document.getElementById('bulkFiles').click()">
             📸 画像を選択（最大6枚）
@@ -139,8 +147,21 @@ window.onload = function() {
         })
         .catch(err => {
             console.error("LINE初期化エラー: " + err.toString());
+            showAuthError();
         });
 };
+
+// LINE認証に失敗したとき：お知らせを出し、操作できるボタンをすべて押せなくする
+// （LINE IDが無いまま送信すると、誰の分析か分からないデータになるため）
+function showAuthError() {
+    const box = document.getElementById('authError');
+    box.innerText = "LINEの認証に失敗しました。\nお手数ですが、画面を閉じてもう一度開き直してください。";
+    box.style.display = 'block';
+
+    document.getElementById('submitBtn').disabled = true;
+    document.querySelector('.upload-trigger-btn').classList.add('disabled');
+    document.getElementById('bulkFiles').disabled = true;
+}
 
 // 表示状態とタイマーの初期化（ファイル配列はリセットしない）
 function clearAllPreviousState() {

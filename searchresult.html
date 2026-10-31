@@ -54,13 +54,20 @@
         /* 送信ボタン */
         .submit-btn { width: 100%; background-color: #38a169; color: white; border: none; padding: 12px; font-size: 15px; font-weight: bold; border-radius: 8px; cursor: pointer; margin-top: 15px; }
         .submit-btn:disabled { background-color: #cbd5e0; cursor: not-allowed; }
+
+        /* LINE認証に失敗したときのお知らせ */
+        #authError { display: none; background: #fff5f5; border: 1px solid #feb2b2; color: #c53030; padding: 12px; border-radius: 8px; font-size: 14px; font-weight: bold; line-height: 1.6; text-align: center; margin-bottom: 15px; }
+        .quick-btn:disabled { background: #edf2f7; color: #a0aec0; border-color: #e2e8f0; cursor: not-allowed; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h2>過去データ検索・閲覧</h2>
-    
+
+    <!-- LINE認証に失敗したときだけ表示する -->
+    <div id="authError"></div>
+
     <div class="form-group">
         <label>📅 期間・日付指定</label>
         <div class="date-range">
@@ -189,8 +196,22 @@ window.onload = function() {
         .then(profile => {
             if (profile) globalLineId = profile.userId;
         })
-        .catch(err => console.error("LINE初期化エラー: " + err.toString()));
+        .catch(err => {
+            console.error("LINE初期化エラー: " + err.toString());
+            showAuthError();
+        });
 };
+
+// LINE認証に失敗したとき：お知らせを出し、検索ボタン類をすべて押せなくする
+// （LINE IDが無いと、誰のデータを探すのか分からないため）
+function showAuthError() {
+    const box = document.getElementById('authError');
+    box.innerText = "LINEの認証に失敗しました。\nお手数ですが、画面を閉じてもう一度開き直してください。";
+    box.style.display = 'block';
+
+    document.getElementById('searchBtn').disabled = true;
+    document.querySelectorAll('.quick-btn').forEach(b => b.disabled = true);
+}
 
 // 日付を yyyy-mm-dd 形式に（端末のローカル時刻で計算）
 function formatDate(d) {
