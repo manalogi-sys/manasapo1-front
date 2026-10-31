@@ -18,6 +18,7 @@
     <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <meta name="theme-color" content="#ffffff">
+    <script src="app-auth.js"></script>
 
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8f9fa; color: #333; margin: 0;
@@ -39,6 +40,17 @@
         /* ホーム画面に追加していない(Safari等で開いている)ときだけ出す案内 */
         #installHint { display: none; margin-top: 20px; padding: 14px; background: #fffaf0; border: 1px solid #fbd38d; border-radius: 10px; font-size: 13px; line-height: 1.7; color: #744210; }
         #installHint b { color: #c05621; }
+
+        /* 連携画面(ホーム画面から初めて開いたとき) */
+        #linkPanel { display: none; text-align: center; }
+        #linkPanel p { font-size: 14px; line-height: 1.8; color: #4a5568; margin: 0 0 18px; }
+        .link-btn { width: 100%; background-color: #06c755; color: #fff; border: none; padding: 16px; font-size: 17px; font-weight: bold; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 6px rgba(6,199,85,0.25); }
+        .link-btn:disabled { background-color: #cbd5e0; box-shadow: none; }
+        #linkStatus { display: none; margin-top: 18px; padding: 14px; background: #f0fff4; border: 1px solid #9ae6b4; border-radius: 10px; font-size: 14px; line-height: 1.7; color: #22543d; }
+        #linkStatus.error { background: #fff5f5; border-color: #feb2b2; color: #c53030; }
+        .spinner { display: inline-block; width: 18px; height: 18px; border: 3px solid rgba(56,161,105,.3); border-radius: 50%; border-top-color: #38a169; animation: spin 1s linear infinite; vertical-align: middle; margin-right: 6px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .retry-link { display: inline-block; margin-top: 12px; color: #3182ce; font-size: 13px; text-decoration: underline; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -47,7 +59,15 @@
     <img class="logo" src="icons/icon-192.png" alt="マナサポ AI査定">
     <h1>マナサポ AI査定</h1>
 
-    <!-- 飛び先はLINEのリッチメニューと同じページ。本人の特定(LINEログイン)は各ページで行う -->
+    <!-- 連携画面:ホーム画面から初めて開いたときだけ出す(最初の1回だけLINEと連携する) -->
+    <div id="linkPanel">
+        <p>はじめに、<b>LINEと連携</b>してください。<br>(最初の1回だけです)</p>
+        <button class="link-btn" id="linkBtn" onclick="startLink()">LINEと連携する</button>
+        <div id="linkStatus"></div>
+    </div>
+
+    <!-- 飛び先はLINEのリッチメニューと同じページ。本人の特定は各ページで行う -->
+    <div id="menu">
     <a class="menu-btn btn-analyze" href="shouhinkaiseki.html">
         <span class="icon">🔍</span>
         <span><div class="title">商品解析</div><div class="sub">写真を送ってAIが査定</div></span>
@@ -60,6 +80,7 @@
         <span class="icon">📦</span>
         <span><div class="title">依頼リスト</div><div class="sub">出品依頼の確認・修正</div></span>
     </a>
+    </div>
 
     <div id="installHint">
         <b>ホーム画面に追加すると、次からアイコン1つで開けます。</b><br>
@@ -69,16 +90,86 @@
 </div>
 
 <script>
-// ホーム画面のアイコンから開いているか(全画面表示か)を判定する
-function isStandalone() {
-    return window.navigator.standalone === true ||
-           window.matchMedia('(display-mode: standalone)').matches;
-}
-
 // まだホーム画面に追加していない人には、追加のしかたを表示する
 // (LINEの中で開いたときは追加できないので出さない)
-if (!isStandalone() && !/Line\//i.test(navigator.userAgent)) {
+if (!AppAuth.isStandalone() && !/Line\//i.test(navigator.userAgent)) {
     document.getElementById('installHint').style.display = 'block';
+}
+
+// ===== ホーム画面から開いたとき:未連携なら連携画面を出す(app-auth.js) =====
+let linkTimer = null;
+
+function showMenu() {
+    document.getElementById('linkPanel').style.display = 'none';
+    document.getElementById('menu').style.display = 'block';
+}
+
+function showLinkPanel() {
+    document.getElementById('menu').style.display = 'none';
+    document.getElementById('linkPanel').style.display = 'block';
+}
+
+function setStatus(html, isError) {
+    const box = document.getElementById('linkStatus');
+    box.innerHTML = html;
+    box.className = isError ? 'error' : '';
+    box.style.display = 'block';
+}
+
+// 「LINEと連携する」を押したとき
+function startLink() {
+    AppAuth.beginLink();
+    waitForLink();
+}
+
+// 連携ページが済むのを待つ(3秒おきにGASへ問い合わせ。アプリに戻ってきた瞬間にも確認)
+function waitForLink() {
+    document.getElementById('linkBtn').disabled = true;
+    setStatus('<span class="spinner"></span>LINEの画面で連携しています。<br>' +
+              '「連携が完了しました」と出たら、<b>この「AI査定」アプリに戻って</b>ください。<br>' +
+              '<span class="retry-link" onclick="resetLink()">うまくいかないときは、やり直す</span>');
+    if (linkTimer) clearInterval(linkTimer);
+    linkTimer = setInterval(pollLink, 3000);
+    pollLink();
+}
+
+async function pollLink() {
+    let result;
+    try {
+        result = await AppAuth.checkLink();
+    } catch (e) {
+        return; // 通信の失敗は次の問い合わせで再挑戦
+    }
+    if (result === "waiting") return;
+    clearInterval(linkTimer);
+    linkTimer = null;
+    if (result === "linked") {
+        showMenu();
+        return;
+    }
+    document.getElementById('linkBtn').disabled = false;
+    if (result === "none") {
+        setStatus('時間が経ったため、連携をやり直してください。<br>もう一度「LINEと連携する」を押してください。', true);
+    } else {
+        setStatus(result + '<br><span class="retry-link" onclick="resetLink()">やり直す</span>', true);
+    }
+}
+
+function resetLink() {
+    if (linkTimer) clearInterval(linkTimer);
+    linkTimer = null;
+    document.getElementById('linkBtn').disabled = false;
+    document.getElementById('linkStatus').style.display = 'none';
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && linkTimer) pollLink();
+});
+
+if (AppAuth.isStandalone() && !AppAuth.getToken()) {
+    showLinkPanel();
+    // 連携の途中でアプリが閉じられていた場合は、続きから待つ
+    if (AppAuth.getPending()) waitForLink();
 }
 </script>
 </body>

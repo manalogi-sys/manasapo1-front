@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>商品分析・査定サポート</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="app-auth.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8f9fa; padding: 15px; color: #333; margin: 0; }
         .container { max-width: 500px; margin: 0 auto; background: #fff; padding: 25px 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
@@ -142,6 +143,14 @@ function createRequestId() {
 
 // LINE LIFFの初期化
 window.onload = function() {
+    // ホーム画面アプリ「AI査定」から開いたとき:LINEログインの代わりに端末の鍵を使う(app-auth.js)
+    const app = AppAuth.startPage();
+    if (app.mode === "redirect") return;        // 未連携 → トップページの連携画面へ移動済み
+    if (app.mode === "app") {
+        globalLineId = app.lineId;
+        return;
+    }
+
     liff.init({ liffId: LIFF_ID })
         .then(() => {
             if (liff.isLoggedIn()) {
@@ -178,7 +187,12 @@ function showAuthError() {
 // GASはこれをLINEに確認してから処理するので、他人のLINE IDを名乗っても使えない。
 // (3ページ共通。直すときは irailist / searchresult / shouhinkaiseki を同じように直す)
 function withIdToken(payload) {
-    payload.idToken = liff.getIDToken();
+    if (AppAuth.isAppMode()) {
+        // ホーム画面アプリから:端末の鍵を送る(GASが「アプリ連携」シートで本人を特定する)
+        payload.appToken = AppAuth.getToken();
+    } else {
+        payload.idToken = liff.getIDToken();
+    }
     return payload;
 }
 
@@ -194,6 +208,12 @@ function isAuthError(data) {
 
 // LINEに入り直して新しい本人証明書を取る
 function reauthLine() {
+    // ホーム画面アプリから:鍵が使えなくなった(連携が解除された等)→ 連携をやり直してもらう
+    if (AppAuth.isAppMode()) {
+        AppAuth.relink();
+        return;
+    }
+
     // 何度も開き直しを繰り返さないよう、1分以内の2回目はお知らせを出して止める
     let last = 0;
     try { last = Number(sessionStorage.getItem('reauthAt') || 0); } catch (e) {}
