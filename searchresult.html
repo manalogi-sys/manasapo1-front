@@ -243,12 +243,16 @@ function showAuthError() {
 // GASに送るデータには、LINEが発行した本人証明書(IDトークン)を必ず付ける。
 // GASはこれをLINEに確認してから処理するので、他人のLINE IDを名乗っても使えない。
 // (3ページ共通。直すときは irailist / searchresult / shouhinkaiseki を同じように直す)
+// あわせて、どの入口から使ったか(payload.entry)も送る。GASの「利用統計」シートで数える
+//   app=ホーム画面アプリ / line=LINEの中(リッチメニュー) / browser=Safari等
 function withIdToken(payload) {
     if (AppAuth.isAppMode()) {
         // ホーム画面アプリから:端末の鍵を送る(GASが「アプリ連携」シートで本人を特定する)
         payload.appToken = AppAuth.getToken();
+        payload.entry = "app";
     } else {
         payload.idToken = liff.getIDToken();
+        payload.entry = liff.isInClient() ? "line" : "browser";
     }
     return payload;
 }
