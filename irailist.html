@@ -135,7 +135,10 @@ window.onload = function() {
         })
         .catch(err => {
             console.error("LINE初期化エラー: " + err.toString());
-            document.getElementById('loading').innerText = "LINE認証エラーが発生しました。";
+            // 3ページ共通の文言（商品分析・過去データ検索と同じ）
+            const loadingEl = document.getElementById('loading');
+            loadingEl.innerText = "LINEの認証に失敗しました。\nお手数ですが、画面を閉じてもう一度開き直してください。";
+            loadingEl.style.color = '#c53030';
         });
 };
 
