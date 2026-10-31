@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>AI査定</title>
+
+    <!-- ===== ホーム画面に追加したときの設定 =====
+         ・アドレスバー無しの全画面で開く(アプリっぽく見せる)
+         ・アイコンの下に出る名前は「AI査定」
+         ・アイコン画像:icons/ フォルダ(元画像はGoogleドライブ「マナサポAI査定」の S__85573659.jpg を余白を詰めて縮小)
+         ・Android 用の設定は manifest.webmanifest にある -->
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="AI査定">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <meta name="theme-color" content="#ffffff">
+
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8f9fa; color: #333; margin: 0;
+               padding: calc(20px + env(safe-area-inset-top)) 15px calc(20px + env(safe-area-inset-bottom)); }
+        .container { max-width: 500px; margin: 0 auto; background: #fff; padding: 25px 20px 30px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        .logo { display: block; width: 120px; height: 120px; margin: 0 auto 10px; border-radius: 26px; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
+        h1 { text-align: center; color: #2c3e50; font-size: 20px; margin: 0 0 25px; }
+
+        /* 3つの機能ボタン(リッチメニューの代わり) */
+        .menu-btn { display: flex; align-items: center; gap: 14px; text-decoration: none; color: #fff; padding: 18px 18px; border-radius: 12px; margin-bottom: 14px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.08); }
+        .menu-btn:active { transform: scale(0.98); }
+        .menu-btn .icon { font-size: 30px; }
+        .menu-btn .title { font-size: 18px; }
+        .menu-btn .sub { font-size: 12px; font-weight: normal; opacity: 0.9; margin-top: 2px; }
+        .btn-analyze { background-color: #9f7aea; }
+        .btn-history { background-color: #3182ce; }
+        .btn-request { background-color: #38a169; }
+
+        /* ホーム画面に追加していない(Safari等で開いている)ときだけ出す案内 */
+        #installHint { display: none; margin-top: 20px; padding: 14px; background: #fffaf0; border: 1px solid #fbd38d; border-radius: 10px; font-size: 13px; line-height: 1.7; color: #744210; }
+        #installHint b { color: #c05621; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <img class="logo" src="icons/icon-192.png" alt="マナサポ AI査定">
+    <h1>マナサポ AI査定</h1>
+
+    <!-- 飛び先はLINEのリッチメニューと同じページ。本人の特定(LINEログイン)は各ページで行う -->
+    <a class="menu-btn btn-analyze" href="shouhinkaiseki.html">
+        <span class="icon">🔍</span>
+        <span><div class="title">商品解析</div><div class="sub">写真を送ってAIが査定</div></span>
+    </a>
+    <a class="menu-btn btn-history" href="searchresult.html">
+        <span class="icon">📊</span>
+        <span><div class="title">解析の履歴</div><div class="sub">過去の解析結果を見る・出品依頼</div></span>
+    </a>
+    <a class="menu-btn btn-request" href="irailist.html">
+        <span class="icon">📦</span>
+        <span><div class="title">依頼リスト</div><div class="sub">出品依頼の確認・修正</div></span>
+    </a>
+
+    <div id="installHint">
+        <b>ホーム画面に追加すると、次からアイコン1つで開けます。</b><br>
+        iPhone:下の共有ボタン(□に↑)→「ホーム画面に追加」<br>
+        Android:右上の︙メニュー →「ホーム画面に追加」
+    </div>
+</div>
+
+<script>
+// ホーム画面のアイコンから開いているか(全画面表示か)を判定する
+function isStandalone() {
+    return window.navigator.standalone === true ||
+           window.matchMedia('(display-mode: standalone)').matches;
+}
+
+// まだホーム画面に追加していない人には、追加のしかたを表示する
+// (LINEの中で開いたときは追加できないので出さない)
+if (!isStandalone() && !/Line\//i.test(navigator.userAgent)) {
+    document.getElementById('installHint').style.display = 'block';
+}
+</script>
+</body>
+</html>

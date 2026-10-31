@@ -62,6 +62,15 @@
 </head>
 <body>
 
+<!-- ホーム画面のアイコンから開いたときだけ出す「メニューに戻る」
+     (全画面表示ではブラウザの戻るボタンが無いため。LINEから開いたときは出さない) -->
+<a id="backToMenu" href="./" style="display:none; margin: 0 auto 10px; max-width: 500px; color: #3182ce; font-size: 14px; font-weight: bold; text-decoration: none; padding: calc(4px + env(safe-area-inset-top)) 4px 4px;">← メニューに戻る</a>
+<script>
+if (window.navigator.standalone === true || window.matchMedia('(display-mode: standalone)').matches) {
+    document.getElementById('backToMenu').style.display = 'block';
+}
+</script>
+
 <div class="container">
     <h2>過去データ検索・閲覧</h2>
 
