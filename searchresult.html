@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>過去データ検索・閲覧</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="app-auth.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8f9fa; padding: 15px; color: #333; margin: 0; }
         .container { max-width: 500px; margin: 0 auto; background: #fff; padding: 25px 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
@@ -195,6 +196,21 @@ let selectedIndex = null;
 
 // LINE LIFFの初期化
 window.onload = function() {
+    // アプリ連携のために開かれたとき(?link=合言葉)は、連携の処理だけをする
+    const linkCode = AppAuth.getLinkCodeFromUrl();
+    if (linkCode) {
+        runLinkMode(linkCode);
+        return;
+    }
+
+    // ホーム画面アプリ「AI査定」から開いたとき:LINEログインの代わりに端末の鍵を使う(app-auth.js)
+    const app = AppAuth.startPage();
+    if (app.mode === "redirect") return;        // 未連携 → トップページの連携画面へ移動済み
+    if (app.mode === "app") {
+        globalLineId = app.lineId;
+        return;
+    }
+
     liff.init({ liffId: LIFF_ID })
         .then(() => {
             if (liff.isLoggedIn()) {
@@ -228,7 +244,12 @@ function showAuthError() {
 // GASはこれをLINEに確認してから処理するので、他人のLINE IDを名乗っても使えない。
 // (3ページ共通。直すときは irailist / searchresult / shouhinkaiseki を同じように直す)
 function withIdToken(payload) {
-    payload.idToken = liff.getIDToken();
+    if (AppAuth.isAppMode()) {
+        // ホーム画面アプリから:端末の鍵を送る(GASが「アプリ連携」シートで本人を特定する)
+        payload.appToken = AppAuth.getToken();
+    } else {
+        payload.idToken = liff.getIDToken();
+    }
     return payload;
 }
 
@@ -244,6 +265,12 @@ function isAuthError(data) {
 
 // LINEに入り直して新しい本人証明書を取る
 function reauthLine() {
+    // ホーム画面アプリから:鍵が使えなくなった(連携が解除された等)→ 連携をやり直してもらう
+    if (AppAuth.isAppMode()) {
+        AppAuth.relink();
+        return;
+    }
+
     // 何度も開き直しを繰り返さないよう、1分以内の2回目はお知らせを出して止める
     let last = 0;
     try { last = Number(sessionStorage.getItem('reauthAt') || 0); } catch (e) {}
@@ -263,6 +290,43 @@ function reauthLine() {
     }
 }
 
+
+// ===== 連携ページ(ホーム画面アプリ「AI査定」との連携。URLに ?link=合言葉 が付いているとき) =====
+// アプリから開かれ、LINEにログインして本人証明書と合言葉をGASに届ける。
+// 届いたらアプリ側が気づいて連携完了になる(app-auth.js / GAS の アプリ連携.js)。
+function runLinkMode(linkCode) {
+    const box = document.querySelector('.container');
+    const show = (html, color, withClose) => {
+        box.innerHTML = '<h2>AI査定 アプリ連携</h2>' +
+            '<div style="text-align:center; font-size:15px; line-height:1.9; font-weight:bold; color:' + (color || '#2d3748') + ';">' + html + '</div>' +
+            (withClose ? '<button class="search-btn" style="margin-top:25px;" onclick="liff.closeWindow()">この画面を閉じる</button>' : '');
+    };
+    show('LINEと連携しています...');
+
+    liff.init({ liffId: LIFF_ID })
+        .then(async () => {
+            if (!liff.isLoggedIn()) {
+                // LINEアプリの外(Safari等)で開いたとき:ログインして、この連携ページに戻ってくる
+                liff.login({ redirectUri: location.origin + location.pathname + '?link=' + linkCode });
+                return;
+            }
+            const res = await fetch(GAS_SEARCH_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                body: 'data=' + encodeURIComponent(JSON.stringify({ action: 'link_complete', linkCode: linkCode, idToken: liff.getIDToken() }))
+            });
+            const data = await res.json();
+            if (data.status === 'success') {
+                show('✅ 連携が完了しました。<br><br>ホーム画面の<br>「AI査定」アプリに戻ってください。', '#22543d', liff.isInClient());
+            } else {
+                show(data.message || '連携に失敗しました。<br>アプリに戻って、もう一度「LINEと連携する」を押してください。', '#c53030', liff.isInClient());
+            }
+        })
+        .catch(err => {
+            console.error("連携エラー: " + err.toString());
+            show('LINEの認証に失敗しました。<br>アプリに戻って、もう一度「LINEと連携する」を押してください。', '#c53030');
+        });
+}
 
 // 日付を yyyy-mm-dd 形式に（端末のローカル時刻で計算）
 function formatDate(d) {
