@@ -19,6 +19,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <meta name="theme-color" content="#ffffff">
     <script src="app-auth.js"></script>
+    <script src="liff-select.js"></script>
 
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8f9fa; color: #333; margin: 0;
@@ -82,6 +83,8 @@
     </a>
     </div>
 
+    <!-- 新しい公式LINEの LIFF から開かれ、目的のページへ移るのを待っているあいだだけ出す -->
+    <div id="liffWait" style="display:none; text-align:center; font-size:15px; line-height:1.9; color:#4a5568;">開いています...</div>
     <div id="installHint">
         <b>ホーム画面に追加すると、次からアイコン1つで開けます。</b><br>
         iPhone:下の共有ボタン(□に↑)→「ホーム画面に追加」<br>
@@ -90,9 +93,20 @@
 </div>
 
 <script>
+// ===== 新しい公式LINE(@525iwdlq)の LIFF から開かれたとき(liff-select.js) =====
+// LIFF のエンドポイントがこのトップなので、LINE はまずここを ?liff.state=/ページ名 付きで開く。
+// ここで liff.init() すると目的のページへ移るので、メニューは出さずに待つ。
+const openedByLiff = LiffSelect.handleEndpoint(() => {
+    document.getElementById('liffWait').innerHTML =
+        'LINEの画面を開けませんでした。<br>お手数ですが、画面を閉じてもう一度開き直してください。';
+});
+if (openedByLiff) {
+    document.getElementById('menu').style.display = 'none';
+    document.getElementById('liffWait').style.display = 'block';
+}
 // まだホーム画面に追加していない人には、追加のしかたを表示する
 // (LINEの中で開いたときは追加できないので出さない)
-if (!AppAuth.isStandalone() && !/Line\//i.test(navigator.userAgent)) {
+if (!openedByLiff && !AppAuth.isStandalone() && !/Line\//i.test(navigator.userAgent)) {
     document.getElementById('installHint').style.display = 'block';
 }
 
@@ -166,7 +180,7 @@ document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && linkTimer) pollLink();
 });
 
-if (AppAuth.isStandalone() && !AppAuth.getToken()) {
+if (!openedByLiff && AppAuth.isStandalone() && !AppAuth.getToken()) {
     showLinkPanel();
     // 連携の途中でアプリが閉じられていた場合は、続きから待つ
     if (AppAuth.getPending()) waitForLink();

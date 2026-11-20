@@ -19,6 +19,8 @@ const AppAuth = (() => {
     // 連携の受付をするGAS(マナサポ商品解析結果検索)
     const GAS_LINK_URL = "https://script.google.com/macros/s/AKfycbzWTBjlsMk13LvUfiq2pr0PZ2-UPyKD-8Bmi2lc6OFkNckNrBhTsjJKZnqFVb0fV2JR/exec";
     // 連携ページを開くURL(解析の履歴のLIFF。LINEアプリで開けばログイン不要)
+    // ※公式LINEの引っ越し(@525iwdlq)の並行期間は、今の LIFF のまま(今の利用者のIDで連携する)。
+    //   切り替えのときに "https://liff.line.me/2012714412-8TOGAjf3/searchresult.html" に変える(liff-select.js)。
     const LINK_LIFF_URL = "https://liff.line.me/2011480421-iWstUz1i";
     const LINK_VALID_MS = 10 * 60 * 1000; // 合言葉の有効時間(GAS側も10分)
 

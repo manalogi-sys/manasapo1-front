@@ -6,6 +6,7 @@
     <title>商品分析・査定サポート</title>
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <script src="app-auth.js"></script>
+    <script src="liff-select.js"></script>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8f9fa; padding: 15px; color: #333; margin: 0; }
         .container { max-width: 500px; margin: 0 auto; background: #fff; padding: 25px 20px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
@@ -151,12 +152,12 @@ window.onload = function() {
         return;
     }
 
-    liff.init({ liffId: LIFF_ID })
+    liff.init({ liffId: LiffSelect.liffId(LIFF_ID) }) // 新旧どちらの公式LINEから開いたかで選ぶ(liff-select.js)
         .then(() => {
             if (liff.isLoggedIn()) {
                 return liff.getProfile();
             } else {
-                liff.login();
+                liff.login(LiffSelect.loginOptions());
             }
         })
         .then(profile => {
@@ -229,7 +230,7 @@ function reauthLine() {
 
     if (liff.isInClient()) {
         // LINEの中:LIFFを開き直すと新しい証明書がもらえる
-        location.href = "https://liff.line.me/" + LIFF_ID;
+        location.href = LiffSelect.reopenUrl(LIFF_ID, "shouhinkaiseki.html");
     } else {
         // ホーム画面・ブラウザ:いったんログアウトしてログインし直す
         liff.logout();
